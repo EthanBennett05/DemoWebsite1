@@ -5,27 +5,48 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
 
-// Configuration
-const JWT_SECRET = 'your-secret-key-change-this-to-something-secure';
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD_HASH = bcrypt.hashSync('password123', 10); // Change this password!
+// Configuration - Use Environment Variables for Security
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
+const CLOUDINARY_NAME = process.env.CLOUDINARY_NAME;
+const CLOUDINARY_KEY = process.env.CLOUDINARY_KEY;
+const CLOUDINARY_SECRET = process.env.CLOUDINARY_SECRET;
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: CLOUDINARY_NAME,
+  api_key: CLOUDINARY_KEY,
+  api_secret: CLOUDINARY_SECRET
+});
+
+// Configure Cloudinary Storage for Multer
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: '11rock_uploads',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif'],
+  },
+});
+
+const upload = multer({ storage: storage });
+
+// Admin Config
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD_HASH = bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'password123', 10);
 const PORT = process.env.PORT || 5001;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static('uploads'));
 
-// Verify admin token middleware
+// Auth Middleware
 const verifyAdmin = (req, res, next) => {
   const token = req.headers['authorization'];
-  
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ error: 'No token provided' });
   
   try {
     const decoded = jwt.verify(token.replace('Bearer ', ''), JWT_SECRET);
@@ -36,94 +57,53 @@ const verifyAdmin = (req, res, next) => {
   }
 };
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+// ============ UPDATED ROUTES ============
+
+// Get all images (Public)
+app.get('/api/images', async (req, res) => {
+  try {
+    // We fetch the list of images directly from Cloudinary
+    const result = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: '11rock_uploads' 
+    });
+    const images = result.resources.map(file => file.secure_url);
+    res.json({ images });
+  } catch (err) {
+    res.status(500).json({ error: 'Unable to fetch images from cloud' });
   }
 });
 
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5000000 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    const fileTypes = /jpeg|jpg|png|gif/;
-    const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = fileTypes.test(file.mimetype);
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb('Error: Images only!');
-    }
+// Upload image (Admin)
+app.post('/api/upload', verifyAdmin, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  
+  // Cloudinary returns the full URL in req.file.path
+  res.json({ 
+    message: 'Uploaded to Cloud!',
+    path: req.file.path 
+  });
+});
+
+// Delete image (Admin)
+app.delete('/api/images/:public_id', verifyAdmin, async (req, res) => {
+  try {
+    // For Cloudinary, we delete using the "public_id"
+    const publicId = `11rock_uploads/${req.params.public_id}`;
+    await cloudinary.uploader.destroy(publicId);
+    res.json({ message: 'Deleted from Cloud' });
+  } catch (err) {
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 
-// ============ ROUTES ============
-
-// Test endpoint
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'Backend is working!' });
-});
-
-// Login endpoint
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  
-  if (username !== ADMIN_USERNAME) {
+  if (username !== ADMIN_USERNAME || !bcrypt.compareSync(password, ADMIN_PASSWORD_HASH)) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  
-  const validPassword = bcrypt.compareSync(password, ADMIN_PASSWORD_HASH);
-  
-  if (!validPassword) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-  
   const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '24h' });
   res.json({ token, message: 'Login successful' });
 });
 
-// Get all images (public - no auth required)
-app.get('/api/images', (req, res) => {
-  fs.readdir('uploads/', (err, files) => {
-    if (err) {
-      return res.status(500).json({ error: 'Unable to read images' });
-    }
-    const images = files.map(file => `/uploads/${file}`);
-    res.json({ images });
-  });
-});
-
-// Upload image (admin only)
-app.post('/api/upload', verifyAdmin, upload.single('image'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-  res.json({ 
-    message: 'Image uploaded successfully',
-    filename: req.file.filename,
-    path: `/uploads/${req.file.filename}`
-  });
-});
-
-// Delete image (admin only)
-app.delete('/api/images/:filename', verifyAdmin, (req, res) => {
-  const filename = req.params.filename;
-  const filepath = path.join(__dirname, 'uploads', filename);
-  
-  fs.unlink(filepath, (err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Unable to delete image' });
-    }
-    res.json({ message: 'Image deleted successfully' });
-  });
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server live on port ${PORT}`));
