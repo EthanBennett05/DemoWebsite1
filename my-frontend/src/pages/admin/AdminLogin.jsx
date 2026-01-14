@@ -10,7 +10,7 @@ export default function AdminLogin() {
 
   // Dynamic API URL logic to switch between Render and Localhost automatically
   const API_BASE_URL = import.meta.env.PROD 
-    ? "https://demowebsite1-backend.onrender.com/" // Replace with your Render URL
+    ? "https://demowebsite1-backend.onrender.com" // Replace with your Render URL
     : "http://localhost:5001";
 
   const handleSubmit = async (e) => {

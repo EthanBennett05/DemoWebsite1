@@ -11,7 +11,7 @@ export default function AdminDashboard() {
 
   // Dynamic API URL for Render vs Local
   const API_BASE_URL = import.meta.env.PROD 
-    ? "https://demowebsite1-backend.onrender.com/" // Replace with your Render URL
+    ? "https://demowebsite1-backend.onrender.com" // Replace with your Render URL
     : "http://localhost:5001";
 
   useEffect(() => {

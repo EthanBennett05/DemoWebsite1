@@ -8,7 +8,7 @@ export default function Gallery() {
   }, []);
 
   const API_BASE_URL = import.meta.env.PROD 
-    ? "https://demowebsite1-backend.onrender.com/" // Change this to your Render URL
+    ? "https://demowebsite1-backend.onrender.com" // Change this to your Render URL
     : "http://localhost:5001";
 
   const fetchImages = async () => {
