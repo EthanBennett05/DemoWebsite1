@@ -12,7 +12,7 @@ const app = express();
 const JWT_SECRET = 'your-secret-key-change-this-to-something-secure';
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD_HASH = bcrypt.hashSync('password123', 10); // Change this password!
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
 // Middleware
 app.use(cors());
