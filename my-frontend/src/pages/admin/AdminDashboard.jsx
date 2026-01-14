@@ -9,6 +9,11 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const token = localStorage.getItem("adminToken");
 
+  // Dynamic API URL for Render vs Local
+  const API_BASE_URL = import.meta.env.PROD 
+    ? "https://demowebsite1-backend.onrender.com/" // Replace with your Render URL
+    : "http://localhost:5001";
+
   useEffect(() => {
     if (!token) {
       navigate("/admin");
@@ -19,7 +24,7 @@ export default function AdminDashboard() {
 
   const fetchImages = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/images");
+      const res = await fetch(`${API_BASE_URL}/api/images`);
       const data = await res.json();
       setImages(data.images);
     } catch (err) {
@@ -44,7 +49,7 @@ export default function AdminDashboard() {
     formData.append("image", selectedFile);
 
     try {
-      const res = await fetch("http://localhost:5001/api/upload", {
+      const res = await fetch(`${API_BASE_URL}/api/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -67,13 +72,21 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDelete = async (filename) => {
-    const name = filename.split("/").pop();
+  const handleDelete = async (fullUrl) => {
+    // Cloudinary logic: Extract public_id from the URL
+    // URL looks like: .../11rock_uploads/v123456/filename.jpg
+    const parts = fullUrl.split('/');
+    const filenameWithExtension = parts[parts.length - 1];
+    const publicId = filenameWithExtension.split('.')[0]; 
+
+    if (!window.confirm("Are you sure you want to delete this photo?")) return;
+
     try {
-      const res = await fetch(`http://localhost:5001/api/images/${name}`, {
+      const res = await fetch(`${API_BASE_URL}/api/images/${publicId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      
       if (res.ok) {
         setMessage("Image deleted successfully");
         fetchImages();
@@ -92,18 +105,17 @@ export default function AdminDashboard() {
   };
 
   return (
-    /* Changed p-8 to p-4 for mobile to give the gallery more horizontal space */
     <div className="min-h-screen bg-[#1f1f1f] text-white p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         
-        {/* Header - Stacked on small mobile, row on larger screens */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
           <h1 className="text-2xl md:text-4xl font-bold text-[#d4a574] uppercase tracking-wide">
             Admin Dashboard
           </h1>
           <button
             onClick={handleLogout}
-            className="w-full sm:w-auto bg-red-600 text-white px-6 py-2.5 rounded hover:bg-red-700 font-bold shadow-lg"
+            className="w-full sm:w-auto bg-red-600 text-white px-6 py-2.5 rounded hover:bg-red-700 font-bold shadow-lg transition-transform active:scale-95"
           >
             Logout
           </button>
@@ -117,7 +129,6 @@ export default function AdminDashboard() {
               type="file"
               accept="image/*"
               onChange={handleFileSelect}
-              /* file: text and padding increased for easier tapping */
               className="block w-full text-sm text-[#c9b896]
                 file:mr-4 file:py-3 file:px-4
                 file:rounded file:border-0
@@ -139,35 +150,34 @@ export default function AdminDashboard() {
             </p>
           )}
         </div>
-          {/* Gallery - 2 columns on mobile, 3 on tablets, 4 on desktop */}
-<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-  {images.length === 0 ? (
-    <div className="bg-[#2a2a2a] border-2 border-dashed border-[#8b6f47] p-12 rounded-lg col-span-full text-center">
-      <p className="text-[#c9b896] italic text-lg">No images in the gallery yet</p>
-    </div>
-  ) : (
-    images.map((img, index) => (
-      <div key={index} className="bg-[#2a2a2a] p-2 md:p-3 rounded-lg border-2 md:border-4 border-[#8b6f47] flex flex-col shadow-lg">
-        {/* Reduced height from h-64 to h-32 on mobile, h-48 on desktop */}
-        <div className="relative h-32 md:h-48 w-full mb-2 overflow-hidden rounded">
-           <img
-            src={`http://localhost:5001${img}`}
-            alt={`Upload ${index}`}
-            className="w-full h-full object-cover transition-transform hover:scale-105 duration-500"
-          />
+
+        {/* Gallery Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
+          {images.length === 0 ? (
+            <div className="bg-[#2a2a2a] border-2 border-dashed border-[#8b6f47] p-12 rounded-lg col-span-full text-center">
+              <p className="text-[#c9b896] italic text-lg">No images in the gallery yet</p>
+            </div>
+          ) : (
+            images.map((imgUrl, index) => (
+              <div key={index} className="bg-[#2a2a2a] p-2 md:p-3 rounded-lg border-2 md:border-4 border-[#8b6f47] flex flex-col shadow-lg">
+                <div className="relative h-32 md:h-48 w-full mb-2 overflow-hidden rounded bg-[#1a1a1a]">
+                   <img
+                    src={imgUrl} // Using the full Cloudinary URL directly
+                    alt={`Upload ${index}`}
+                    className="w-full h-full object-cover transition-transform hover:scale-105 duration-500"
+                  />
+                </div>
+                <button
+                  onClick={() => handleDelete(imgUrl)}
+                  className="bg-red-600 text-white py-2 rounded hover:bg-red-700 w-full font-bold uppercase text-[10px] md:text-xs tracking-tighter shadow-md active:scale-95 transition-transform"
+                >
+                  Delete
+                </button>
+              </div>
+            ))
+          )}
         </div>
-        <button
-          onClick={() => handleDelete(img)}
-          /* Scaled down text and padding for the smaller cards */
-          className="bg-red-600 text-white py-2 rounded hover:bg-red-700 w-full font-bold uppercase text-[10px] md:text-xs tracking-tighter shadow-md active:scale-95 transition-transform"
-        >
-          Delete
-        </button>
       </div>
-    ))
-  )}
-</div>
-        </div>
     </div>
   );
 }

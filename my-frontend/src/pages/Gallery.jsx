@@ -7,9 +7,13 @@ export default function Gallery() {
     fetchImages();
   }, []);
 
+  const API_BASE_URL = import.meta.env.PROD 
+    ? "https://demowebsite1-backend.onrender.com/" // Change this to your Render URL
+    : "http://localhost:5001";
+
   const fetchImages = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/images");
+      const res = await fetch(`${API_BASE_URL}/api/images`);
       const data = await res.json();
       setImages(data.images);
     } catch (err) {
@@ -33,10 +37,10 @@ export default function Gallery() {
               No photos yet added
             </p>
           ) : (
-            images.map((img, index) => (
+            images.map((imgUrl, index) => (
               <div key={index} className="bg-[#2d3e2a] p-2 border-2 border-[#7a5c3d] shadow-lg">
                 <img
-                  src={`http://localhost:5001${img}`}
+                  src={imgUrl}
                   alt={`Demo ${index}`}
                   className="md:w-full md:h-32 object-cover rounded"
                 />
